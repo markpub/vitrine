@@ -49,9 +49,19 @@ SITE_REPO="${SITE_REPO:-}"
 echo "==> 1. copy: $SRC -> $CONTENT (source stays untouched)"
 rm -rf "$WORK"
 mkdir -p "$CONTENT"
+# .vitrineignore (optional, at the source root): gitignore-style patterns for
+# paths that stay in the repo but are kept OUT of the published site — metadata,
+# not website (e.g. correspondence between the estates). It is a publish-time
+# exclude only; it never touches git, so ignored files remain tracked and shared.
+IGNORE_OPT=()
+if [ -f "$SRC/.vitrineignore" ]; then
+    IGNORE_OPT=(--exclude-from="$SRC/.vitrineignore")
+    echo "    honoring .vitrineignore"
+fi
 rsync -a \
       --exclude .git --exclude .obsidian --exclude .claude \
-      --exclude .markpub --exclude node_modules \
+      --exclude .markpub --exclude node_modules --exclude .vitrineignore \
+      "${IGNORE_OPT[@]}" \
       --exclude "$(basename "$WORK")" --exclude "$(basename "$OUT")" \
       "$SRC"/ "$CONTENT"/
 

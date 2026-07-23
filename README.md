@@ -16,7 +16,7 @@ Entity-manager repos keep records as Markdown-with-YAML-frontmatter, with three 
 
 `build.sh <source-repo> <output-site>` orchestrates:
 
-1. **copy** — `rsync -a` the source into `$WORK/content`, excluding `.git`, `.obsidian`, `.claude`, `.markpub`, `node_modules` (and the work/output dirs themselves). The source is never written to.
+1. **copy** — `rsync -a` the source into `$WORK/content`, excluding `.git`, `.obsidian`, `.claude`, `.markpub`, `node_modules` (and the work/output dirs themselves). The source is never written to. A **`.vitrineignore`** at the source root (gitignore-style patterns) excludes further paths from the *published site* while leaving them fully git-tracked — for metadata that belongs in the repo but not on the website (e.g. correspondence between collaborators). It is a publish-time filter only; it never touches git.
    - **1b. scaffold** — non-interactive `markpub init` on the copy supplies `.markpub/` (config + dolce theme). Answers are piped from `SITE_TITLE` / `SITE_AUTHOR` / `SITE_REPO`; init's `netlify.toml` and `.github/` side-effects are removed. Scaffolding is regenerated each build, so nothing needs committing.
 2. **sidebar** — `gen_sidebar.py` writes `Sidebar.md` into the copy from the repo's actual room structure (entity index, library, meetingroom, project, tools, logging — only rooms that exist). Links are universal Markdown `[LABEL](/path)`, never `[[wikilinks]]` (forbidden by the repo's convention); includes the MarkPub RANDOM PAGE button idiom, an "About this space" block, and an AI-generated disclosure.
 3. **vitrine** — `vitrine.py` applies the three transforms in place on the copy (publisher-agnostic; see below).
