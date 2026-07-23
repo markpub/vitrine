@@ -6,10 +6,11 @@
 # Chain (the source repo is NEVER mutated; everything happens on a copy):
 #   1. copy      <source-repo> -> $WORK/content   (rsync, excluding VCS/tool dirs)
 #   1b. scaffold non-interactive `markpub init` supplies .markpub/ (config + theme)
-#   2. sidebar   gen_sidebar.py writes Sidebar.md into the copy
-#   3. vitrine   vitrine.py applies the three transforms in place on the copy
-#   4. build     VANILLA markpub renders the copy -> <output-site>
-#   5. post      markpub_post.py puts human titles into <title>/all-pages/search
+#   2. navigate  gen_navigation.py: room Contents indexes, sitemap.md, 404.md
+#   3. sidebar   gen_sidebar.py writes Sidebar.md into the copy
+#   4. vitrine   vitrine.py applies the three transforms in place on the copy
+#   5. build     VANILLA markpub renders the copy -> <output-site>
+#   6. post      markpub_post.py puts human titles into <title>/all-pages/search
 #
 # Environment (all optional):
 #   PYTHON        python interpreter with markpub + pyyaml (default: python3.11)
@@ -18,6 +19,8 @@
 #   SITE_AUTHOR   author line        (default: empty)
 #   SITE_REPO     git repo url for the Edit button, e.g. github.com/org/repo
 #                 (default: empty — no Edit buttons)
+#   VITRINE_FOLDER_NOTE  set to 1 so rooms lacking a folder note get
+#                 `<room>/<room>.md` created instead of `README.md`
 #
 # Cloudflare Pages wiring (vitrine/ vendored in the content repo):
 #   Build command:    pip install markpub && bash vitrine/build.sh . _site
@@ -71,13 +74,16 @@ printf '%s\n%s\n%s\n' "$SITE_TITLE" "$SITE_AUTHOR" "$SITE_REPO" \
 # init side-effects this pipeline does not want in the published copy:
 rm -rf "$CONTENT/.github" "$CONTENT/netlify.toml"
 
-echo "==> 2. sidebar: generate Sidebar.md"
+echo "==> 2. navigate: room indexes, sitemap.md, 404.md"
+"$PYTHON" "$VITRINE_DIR/gen_navigation.py" "$CONTENT"
+
+echo "==> 3. sidebar: generate Sidebar.md"
 "$PYTHON" "$VITRINE_DIR/gen_sidebar.py" "$CONTENT"
 
-echo "==> 3. vitrine: three transforms, in place on the copy"
+echo "==> 4. vitrine: three transforms, in place on the copy"
 "$PYTHON" "$VITRINE_DIR/vitrine.py" "$CONTENT"
 
-echo "==> 4. markpub build (vanilla) -> $OUT"
+echo "==> 5. markpub build (vanilla) -> $OUT"
 LUNR=""
 if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
     if (cd "$CONTENT/.markpub" && npm ci --no-audit --no-fund --loglevel=error); then
@@ -95,7 +101,7 @@ fi
     --templates "$CONTENT/.markpub/this-website-themes/dolce" \
     $LUNR)
 
-echo "==> 5. post: human titles into <title>, all-pages, recent-pages, search"
+echo "==> 6. post: human titles into <title>, all-pages, recent-pages, search"
 "$PYTHON" "$VITRINE_DIR/markpub_post.py" "$CONTENT" "$OUT"
 
 echo "==> done: $OUT"

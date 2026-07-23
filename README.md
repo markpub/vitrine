@@ -18,16 +18,17 @@ Entity-manager repos keep records as Markdown-with-YAML-frontmatter, with three 
 
 1. **copy** — `rsync -a` the source into `$WORK/content`, excluding `.git`, `.obsidian`, `.claude`, `.markpub`, `node_modules` (and the work/output dirs themselves). The source is never written to. A **`.vitrineignore`** at the source root (gitignore-style patterns) excludes further paths from the *published site* while leaving them fully git-tracked — for metadata that belongs in the repo but not on the website (e.g. correspondence between collaborators). It is a publish-time filter only; it never touches git.
    - **1b. scaffold** — non-interactive `markpub init` on the copy supplies `.markpub/` (config + dolce theme). Answers are piped from `SITE_TITLE` / `SITE_AUTHOR` / `SITE_REPO`; init's `netlify.toml` and `.github/` side-effects are removed. Scaffolding is regenerated each build, so nothing needs committing.
-2. **sidebar** — `gen_sidebar.py` writes `Sidebar.md` into the copy from the repo's actual room structure (entity index, library, meetingroom, project, tools, logging — only rooms that exist). Links are universal Markdown `[LABEL](/path)`, never `[[wikilinks]]` (forbidden by the repo's convention); includes the MarkPub RANDOM PAGE button idiom, an "About this space" block, and an AI-generated disclosure.
-3. **vitrine** — `vitrine.py` applies the three transforms in place on the copy (publisher-agnostic; see below).
-4. **build** — **vanilla, unmodified** `markpub build` renders the copy into `<output-site>`. If node/npm are present, the lunr search index is built (powers SEARCH and RANDOM PAGE); if not, the build still succeeds without it.
-5. **post** — `markpub_post.py` (the one deliberately MarkPub-specific piece) rewrites the places MarkPub keys off the filename stem: page `<title>` tags, all-pages/recent-pages listings, and the lunr posts list that drives search-result display.
+2. **navigate** — `gen_navigation.py` generates the navigation MarkPub does not provide: a `## Contents` section (the room's tree — subfolders nested, Markdown files linked by frontmatter `title:`, non-Markdown files like transcripts linked by filename) appended to each room's folder note; a site-wide `sitemap.md`; and a `404.md`. A room with no note gets one created in the copy (`README.md`, or `<room>/<room>.md` with `VITRINE_FOLDER_NOTE=1`). Emitted targets are site-absolute and mirror MarkPub's path scrub (spaces → `_`), so links to `zoom transcript.txt` and kin actually resolve. The entity room keeps its own upstream-generated index.
+3. **sidebar** — `gen_sidebar.py` writes `Sidebar.md` into the copy from the repo's actual room structure (entity index, library, meetingroom, project, tools, logging — only rooms that exist; door: folder note `<room>/<room>.md` first, else `README.md`; plus a SITEMAP entry). Links are universal Markdown `[LABEL](/path)`, never `[[wikilinks]]` (forbidden by the repo's convention); includes the MarkPub RANDOM PAGE button idiom, an "About this space" block, and an AI-generated disclosure.
+4. **vitrine** — `vitrine.py` applies the three transforms in place on the copy (publisher-agnostic; see below).
+5. **build** — **vanilla, unmodified** `markpub build` renders the copy into `<output-site>`. If node/npm are present, the lunr search index is built (powers SEARCH and RANDOM PAGE); if not, the build still succeeds without it.
+6. **post** — `markpub_post.py` (the one deliberately MarkPub-specific piece) rewrites the places MarkPub keys off the filename stem: page `<title>` tags, all-pages/recent-pages listings, and the lunr posts list that drives search-result display.
 
 ## The three transforms (`vitrine.py`)
 
 - **T1 — human titles.** If frontmatter has `title:`, insert `# {title}` as the first body line (unless an H1 already leads). Records without `title:` fall back to their ID. Filenames are never touched.
 - **T2 — strip validator shadows.** Remove `^[ID](path)` immediately following a link, leaving the human `[label](path)` intact.
-- **T3 — `.md` → `.html`.** Rewrite relative/local Markdown link targets (including `#anchors` and reference-style definitions) so cross-references resolve to rendered pages on any static host. External `http(s)://`/`mailto:` targets are never touched. Runs after T2.
+- **T3 — `.md` → `.html`, absolutized.** Rewrite relative/local Markdown link targets (including `#anchors` and reference-style definitions) so cross-references resolve to rendered pages on any static host — and resolve them to **site-absolute** paths (`/entities/decision/DEC-001.html`), computed from each file's location. Relative links are only correct when a page is served at its true URL; hosts that fall back to serving *something* for unknown routes (Cloudflare Pages without a `404.html` serves the home page with a 200) let one bad URL compound into ever-deeper phantom paths. Absolute links end that class of failure; the generated 404 page closes the other half. External `http(s)://`/`mailto:` targets are never touched. Runs after T2.
 
 **Guardrails:** fenced code blocks and inline code spans are never modified — a `^[` or `.md` in an example survives byte-for-byte. Frontmatter is preserved verbatim. Everything outside the three transforms is byte-identical.
 
@@ -40,7 +41,7 @@ SITE_TITLE=comroom SITE_AUTHOR="WSD group" SITE_REPO=github.com/WSD-Talks/comroo
   bash vitrine/build.sh /path/to/comroom /path/to/output-site
 ```
 
-Environment knobs (all optional): `PYTHON` (default `python3.11`), `VITRINE_WORK` (work dir, default `$PWD/_work`, wiped each run), `SITE_TITLE` (default: source basename), `SITE_AUTHOR`, `SITE_REPO` (enables per-page "Edit on GitHub" buttons pointing at the *source* `.md` files).
+Environment knobs (all optional): `PYTHON` (default `python3.11`), `VITRINE_WORK` (work dir, default `$PWD/_work`, wiped each run), `SITE_TITLE` (default: source basename), `SITE_AUTHOR`, `SITE_REPO` (enables per-page "Edit on GitHub" buttons pointing at the *source* `.md` files), `VITRINE_FOLDER_NOTE` (set to 1 so rooms lacking a note get `<room>/<room>.md` created instead of `README.md`).
 
 ## Cloudflare Pages wiring
 
