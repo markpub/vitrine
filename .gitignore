@@ -1,0 +1,7 @@
+# Vitrine build artifacts (staged copy + rendered site)
+_work/
+_site/
+
+# Python caches
+__pycache__/
+*.pyc
