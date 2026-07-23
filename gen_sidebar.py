@@ -38,6 +38,13 @@ RANDOM_PAGE_BLOCK = """{< div class="navlinks" >}
 {< /div >}"""
 
 
+def hardwrap(lines):
+    """Join short prose lines with Markdown hard breaks (two trailing spaces),
+    so a sidebar prose block renders as narrow stacked lines rather than one
+    full-width flowing paragraph."""
+    return '  \n'.join(lines)
+
+
 def room_door(content: Path, room: str):
     """Return the site-absolute .md path for a room's door, or None."""
     d = content / room
@@ -63,6 +70,31 @@ def generate(content: Path) -> str:
     nav.append('- [RECENT CHANGES](/recent-pages.html)')
 
     nav_lines = '\n'.join(nav)
+
+    # Prose blocks are hard-wrapped so the sidebar column stays narrow:
+    # short lines joined with a Markdown hard break (two trailing spaces +
+    # newline). This is the MassiveWiki/OGM sidebar convention — keep prose
+    # from flowing to full width without needing custom CSS. The `  \n` is
+    # produced at runtime so no fragile trailing whitespace lives in source.
+    about = hardwrap([
+        'Shared working space of the',
+        'Adaptive Conversations group:',
+        'sources, calls, decisions,',
+        'and specifications, kept as',
+        'structured Markdown records.',
+    ])
+    about_start = hardwrap([
+        'Start at [HOME](/), or browse',
+        'the [ENTITY INDEX](/entities/entities.md).',
+    ])
+    ai = hardwrap([
+        'Parts of this site are',
+        'prepared and published by',
+        'AI agents; expect some',
+        'errors. Records cite their',
+        'sources and meetings.',
+    ])
+
     return f"""### Site Navigation
 
 {{< div class="navlinks" >}}
@@ -73,22 +105,13 @@ def generate(content: Path) -> str:
 
 ### About this space
 
-Shared working space of the
-Adaptive Conversations group:
-sources, calls, decisions,
-and specifications, kept as
-structured Markdown records.
+{about}
 
-Start at [HOME](/), or browse
-the [ENTITY INDEX](/entities/entities.md).
+{about_start}
 
 ### AI-generated
 
-Parts of this site are
-prepared and published by
-AI agents; expect some
-errors. Records cite their
-sources and meetings.
+{ai}
 """
 
 
