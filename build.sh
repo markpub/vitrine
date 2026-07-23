@@ -6,6 +6,8 @@
 # Chain (the source repo is NEVER mutated; everything happens on a copy):
 #   1. copy      <source-repo> -> $WORK/content   (rsync, excluding VCS/tool dirs)
 #   1b. scaffold non-interactive `markpub init` supplies .markpub/ (config + theme)
+#   1c. rename   (VITRINE_PAGE_NAMES=slug only) rename_pages.py: record pages
+#                -> <id>-<slug> on the copy, rename map for the later stages
 #   2. navigate  gen_navigation.py: room Contents indexes, sitemap.md, 404.md
 #   3. sidebar   gen_sidebar.py writes Sidebar.md into the copy
 #   4. vitrine   vitrine.py applies the three transforms in place on the copy
@@ -21,6 +23,10 @@
 #                 (default: empty — no Edit buttons)
 #   VITRINE_FOLDER_NOTE  set to 1 so rooms lacking a folder note get
 #                 `<room>/<room>.md` created instead of `README.md`
+#   VITRINE_PAGE_NAMES  filename (default) publishes under the source names;
+#                 slug renames record pages on the copy to `<id>-<slug>`
+#                 (frontmatter slug:, else slugified title:). The source
+#                 repo keeps its bare-ID filenames either way.
 #
 # Cloudflare Pages wiring (vitrine/ vendored in the content repo):
 #   Build command:    pip install markpub && bash vitrine/build.sh . _site
@@ -48,6 +54,11 @@ CONTENT="$WORK/content"
 SITE_TITLE="${SITE_TITLE:-$(basename "$SRC")}"
 SITE_AUTHOR="${SITE_AUTHOR:-}"
 SITE_REPO="${SITE_REPO:-}"
+PAGE_NAMES="${VITRINE_PAGE_NAMES:-filename}"
+case "$PAGE_NAMES" in
+    filename|slug) ;;
+    *) echo "error: VITRINE_PAGE_NAMES must be 'filename' or 'slug', got '$PAGE_NAMES'" >&2; exit 2 ;;
+esac
 
 echo "==> 1. copy: $SRC -> $CONTENT (source stays untouched)"
 rm -rf "$WORK"
@@ -74,6 +85,13 @@ printf '%s\n%s\n%s\n' "$SITE_TITLE" "$SITE_AUTHOR" "$SITE_REPO" \
 # init side-effects this pipeline does not want in the published copy:
 rm -rf "$CONTENT/.github" "$CONTENT/netlify.toml"
 
+RENAME_OPT=()
+if [ "$PAGE_NAMES" = "slug" ]; then
+    echo "==> 1c. rename: record pages -> <id>-<slug> (copy only)"
+    "$PYTHON" "$VITRINE_DIR/rename_pages.py" "$CONTENT" "$WORK/rename-map.json"
+    RENAME_OPT=(--rename-map "$WORK/rename-map.json")
+fi
+
 echo "==> 2. navigate: room indexes, sitemap.md, 404.md"
 "$PYTHON" "$VITRINE_DIR/gen_navigation.py" "$CONTENT"
 
@@ -81,7 +99,7 @@ echo "==> 3. sidebar: generate Sidebar.md"
 "$PYTHON" "$VITRINE_DIR/gen_sidebar.py" "$CONTENT"
 
 echo "==> 4. vitrine: three transforms, in place on the copy"
-"$PYTHON" "$VITRINE_DIR/vitrine.py" "$CONTENT"
+"$PYTHON" "$VITRINE_DIR/vitrine.py" "${RENAME_OPT[@]}" "$CONTENT"
 
 echo "==> 5. markpub build (vanilla) -> $OUT"
 LUNR=""
@@ -102,6 +120,6 @@ fi
     $LUNR)
 
 echo "==> 6. post: human titles into <title>, all-pages, recent-pages, search"
-"$PYTHON" "$VITRINE_DIR/markpub_post.py" "$CONTENT" "$OUT"
+"$PYTHON" "$VITRINE_DIR/markpub_post.py" "${RENAME_OPT[@]}" "$CONTENT" "$OUT"
 
 echo "==> done: $OUT"
