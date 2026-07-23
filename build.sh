@@ -6,13 +6,15 @@
 # Chain (the source repo is NEVER mutated; everything happens on a copy):
 #   1. copy      <source-repo> -> $WORK/content   (rsync, excluding VCS/tool dirs)
 #   1b. scaffold non-interactive `markpub init` supplies .markpub/ (config + theme)
-#   1c. rename   (VITRINE_PAGE_NAMES=slug only) rename_pages.py: record pages
+#   2. metadata  gen_metadata.py renders selected frontmatter fields as a
+#                bullet list on each record page (per .vitrine.yaml)
+#   3. rename    (VITRINE_PAGE_NAMES=slug only) rename_pages.py: record pages
 #                -> <id>-<slug> on the copy, rename map for the later stages
-#   2. navigate  gen_navigation.py: room Contents indexes, sitemap.md, 404.md
-#   3. sidebar   gen_sidebar.py writes Sidebar.md into the copy
-#   4. vitrine   vitrine.py applies the three transforms in place on the copy
-#   5. build     VANILLA markpub renders the copy -> <output-site>
-#   6. post      markpub_post.py puts human titles into <title>/all-pages/search
+#   4. navigate  gen_navigation.py: room Contents indexes, sitemap.md, 404.md
+#   5. sidebar   gen_sidebar.py writes Sidebar.md into the copy
+#   6. vitrine   vitrine.py applies the three transforms in place on the copy
+#   7. build     VANILLA markpub renders the copy -> <output-site>
+#   8. post      markpub_post.py puts human titles into <title>/all-pages/search
 #
 # Environment (all optional):
 #   PYTHON        python interpreter with markpub + pyyaml (default: python3.11)
@@ -75,6 +77,7 @@ fi
 rsync -a \
       --exclude .git --exclude .obsidian --exclude .claude \
       --exclude .markpub --exclude node_modules --exclude .vitrineignore \
+      --exclude .vitrine.yaml \
       "${IGNORE_OPT[@]}" \
       --exclude "$(basename "$WORK")" --exclude "$(basename "$OUT")" \
       "$SRC"/ "$CONTENT"/
@@ -85,23 +88,26 @@ printf '%s\n%s\n%s\n' "$SITE_TITLE" "$SITE_AUTHOR" "$SITE_REPO" \
 # init side-effects this pipeline does not want in the published copy:
 rm -rf "$CONTENT/.github" "$CONTENT/netlify.toml"
 
+echo "==> 2. metadata: frontmatter bullet lists (per .vitrine.yaml)"
+"$PYTHON" "$VITRINE_DIR/gen_metadata.py" --config "$SRC/.vitrine.yaml" "$CONTENT"
+
 RENAME_OPT=()
 if [ "$PAGE_NAMES" = "slug" ]; then
-    echo "==> 1c. rename: record pages -> <id>-<slug> (copy only)"
+    echo "==> 3. rename: record pages -> <id>-<slug> (copy only)"
     "$PYTHON" "$VITRINE_DIR/rename_pages.py" "$CONTENT" "$WORK/rename-map.json"
     RENAME_OPT=(--rename-map "$WORK/rename-map.json")
 fi
 
-echo "==> 2. navigate: room indexes, sitemap.md, 404.md"
+echo "==> 4. navigate: room indexes, sitemap.md, 404.md"
 "$PYTHON" "$VITRINE_DIR/gen_navigation.py" "$CONTENT"
 
-echo "==> 3. sidebar: generate Sidebar.md"
+echo "==> 5. sidebar: generate Sidebar.md"
 "$PYTHON" "$VITRINE_DIR/gen_sidebar.py" "$CONTENT"
 
-echo "==> 4. vitrine: three transforms, in place on the copy"
+echo "==> 6. vitrine: three transforms, in place on the copy"
 "$PYTHON" "$VITRINE_DIR/vitrine.py" "${RENAME_OPT[@]}" "$CONTENT"
 
-echo "==> 5. markpub build (vanilla) -> $OUT"
+echo "==> 7. markpub build (vanilla) -> $OUT"
 LUNR=""
 if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
     if (cd "$CONTENT/.markpub" && npm ci --no-audit --no-fund --loglevel=error); then
@@ -119,7 +125,7 @@ fi
     --templates "$CONTENT/.markpub/this-website-themes/dolce" \
     $LUNR)
 
-echo "==> 6. post: human titles into <title>, all-pages, recent-pages, search"
+echo "==> 8. post: human titles into <title>, all-pages, recent-pages, search"
 "$PYTHON" "$VITRINE_DIR/markpub_post.py" "${RENAME_OPT[@]}" "$CONTENT" "$OUT"
 
 echo "==> done: $OUT"
