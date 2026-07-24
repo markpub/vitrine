@@ -53,7 +53,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gen_sidebar import ROOMS, folder_note  # noqa: E402
 from markpub_post import scrub_path  # noqa: E402
-from vitrine import get_title, split_front_matter  # noqa: E402
+from vitrine import escape_link_label, get_title, split_front_matter  # noqa: E402
 
 # Infrastructure pages that must not list themselves.
 SELF_PAGES = {'Sidebar.md', 'sitemap.md', '404.md'}
@@ -82,14 +82,14 @@ def tree_lines(content: Path, d: Path, depth: int, skip: set):
         if entry.is_dir():
             note = folder_note(entry)
             if note:
-                lines.append(f'{indent}- [{entry.name}/]({link_target(content, note)})')
+                lines.append(f'{indent}- [{escape_link_label(entry.name)}/]({link_target(content, note)})')
             else:
                 lines.append(f'{indent}- {entry.name}/')
             lines.extend(tree_lines(content, entry, depth + 1, skip | ({note} if note else set())))
         elif entry.suffix == '.md':
-            lines.append(f'{indent}- [{md_label(entry)}]({link_target(content, entry)})')
+            lines.append(f'{indent}- [{escape_link_label(md_label(entry))}]({link_target(content, entry)})')
         else:
-            lines.append(f'{indent}- [{entry.name}]({link_target(content, entry)})')
+            lines.append(f'{indent}- [{escape_link_label(entry.name)}]({link_target(content, entry)})')
     return lines
 
 

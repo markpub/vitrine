@@ -187,6 +187,13 @@ def get_title(front_matter_block: str):
     return None
 
 
+def escape_link_label(label: str) -> str:
+    """Escape square brackets in a Markdown link label — an unescaped ]
+    would end the label early. Shared by every generator that builds
+    `[label](target)` links from titles or filenames."""
+    return label.replace('[', r'\[').replace(']', r'\]')
+
+
 def body_starts_with_h1(body: str) -> bool:
     for line in body.splitlines():
         if not line.strip():

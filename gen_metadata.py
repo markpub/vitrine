@@ -46,7 +46,7 @@ import yaml
 
 # sibling-module helpers (same directory)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from vitrine import front_matter_data, split_front_matter  # noqa: E402
+from vitrine import escape_link_label, front_matter_data, split_front_matter  # noqa: E402
 
 ID_RE = re.compile(r'^[A-Z][A-Z0-9]*-\d+$')
 URL_RE = re.compile(r'^https?://\S+$')
@@ -85,9 +85,7 @@ def render_value(value, records: dict, self_id) -> str:
     # a record's reference to ITSELF (its own id field) stays plain text
     if text in records and text != self_id:
         path, label = records[text]
-        # square brackets in a title would end the link label early
-        label = label.replace('[', r'\[').replace(']', r'\]')
-        return f'[{label}]({path})'
+        return f'[{escape_link_label(label)}]({path})'
     if URL_RE.match(text):
         return f'<{text}>'
     return text
@@ -103,10 +101,12 @@ def validate_config(config: dict) -> dict:
         if spec in (None, 'none', 'all') or isinstance(spec, list):
             out[entity] = spec
         else:
+            # the did-you-mean hint only makes sense for a bare field name
+            hint = f' (did you mean [{spec}]?)' if isinstance(spec, str) else ''
             print(f"gen_metadata: WARNING: metadata spec for '{entity}' is "
                   f"{spec!r}; expected 'none', 'all', or a list of field "
-                  f"names (did you mean [{spec}]?) — publishing no fields "
-                  f"for this type", file=sys.stderr)
+                  f"names{hint} — publishing no fields for this type",
+                  file=sys.stderr)
             out[entity] = 'none'
     return out
 
