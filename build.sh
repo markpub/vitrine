@@ -109,7 +109,9 @@ echo "==> 5. sidebar: generate Sidebar.md"
 "$PYTHON" "$VITRINE_DIR/gen_sidebar.py" "$CONTENT"
 
 echo "==> 6. vitrine: three transforms, in place on the copy"
-"$PYTHON" "$VITRINE_DIR/vitrine.py" "${RENAME_OPT[@]}" "$CONTENT"
+# ${arr[@]+...} idiom: bash 3.2 (macOS) + set -u treat an EMPTY array
+# expansion as unbound; this expands to nothing when the array is empty
+"$PYTHON" "$VITRINE_DIR/vitrine.py" ${RENAME_OPT[@]+"${RENAME_OPT[@]}"} "$CONTENT"
 
 echo "==> 7. markpub build (vanilla) -> $OUT"
 LUNR=""
@@ -130,6 +132,6 @@ fi
     $LUNR)
 
 echo "==> 8. post: human titles into <title>, all-pages, recent-pages, search"
-"$PYTHON" "$VITRINE_DIR/markpub_post.py" "${RENAME_OPT[@]}" "$CONTENT" "$OUT"
+"$PYTHON" "$VITRINE_DIR/markpub_post.py" ${RENAME_OPT[@]+"${RENAME_OPT[@]}"} "$CONTENT" "$OUT"
 
 echo "==> done: $OUT"
