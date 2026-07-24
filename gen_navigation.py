@@ -48,10 +48,10 @@ import sys
 from pathlib import Path
 
 # sibling-module helpers (same directory): frontmatter parsing from
-# vitrine.py, MarkPub's path scrub from markpub_post.py, the room list
-# from gen_sidebar.py
+# vitrine.py, MarkPub's path scrub from markpub_post.py, the room list and
+# folder-note resolution from gen_sidebar.py
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gen_sidebar import ROOMS  # noqa: E402
+from gen_sidebar import ROOMS, folder_note  # noqa: E402
 from markpub_post import scrub_path  # noqa: E402
 from vitrine import get_title, split_front_matter  # noqa: E402
 
@@ -68,14 +68,6 @@ def md_label(path: Path) -> str:
 def link_target(content: Path, path: Path) -> str:
     """Site-absolute, scrub-mirrored target for a file in the copy."""
     return scrub_path('/' + path.relative_to(content).as_posix())
-
-
-def folder_note(d: Path):
-    """The folder's own note: `<dir>/<dir>.md` first, then README.md."""
-    for name in (f'{d.name}.md', 'README.md'):
-        if (d / name).is_file():
-            return d / name
-    return None
 
 
 def tree_lines(content: Path, d: Path, depth: int, skip: set):

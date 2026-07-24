@@ -32,11 +32,9 @@ import re
 import sys
 from pathlib import Path
 
-import yaml
-
-# sibling-module helper (same directory)
+# sibling-module helpers (same directory)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from vitrine import split_front_matter  # noqa: E402
+from vitrine import front_matter_data, split_front_matter  # noqa: E402
 
 # A bare record ID: type prefix, dash, number (DEC-001, SPEC-006, TOOL-003).
 ID_STEM_RE = re.compile(r'^[A-Z][A-Z0-9]*-\d+$')
@@ -47,8 +45,9 @@ MAX_HANDLE = 60
 def slugify(text: str) -> str:
     s = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
     if len(s) > MAX_HANDLE:
-        # truncate at a word boundary, never mid-word
-        s = s[:MAX_HANDLE + 1].rsplit('-', 1)[0]
+        # truncate at a word boundary where one exists; a single word
+        # longer than MAX_HANDLE is cut hard so the cap always holds
+        s = s[:MAX_HANDLE + 1].rsplit('-', 1)[0][:MAX_HANDLE].rstrip('-')
     return s
 
 
@@ -56,15 +55,7 @@ def handle_for(md: Path):
     """The record's published handle: frontmatter slug:, else slugified
     title:, else None (keep the bare-ID name)."""
     fm, _body = split_front_matter(md.read_text(encoding='utf-8'))
-    if not fm:
-        return None
-    inner = ''.join(fm.splitlines(keepends=True)[1:-1])
-    try:
-        data = yaml.safe_load(inner)
-    except yaml.YAMLError:
-        return None
-    if not isinstance(data, dict):
-        return None
+    data = front_matter_data(fm)
     slug = data.get('slug')
     if isinstance(slug, str) and slug.strip():
         return slugify(slug)

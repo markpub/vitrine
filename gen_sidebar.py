@@ -48,16 +48,25 @@ def hardwrap(lines):
     return '  \n'.join(lines)
 
 
+def folder_note(d: Path):
+    """The folder's own note: `<dir>/<dir>.md` (Obsidian folder-note
+    convention) wins over README.md, so both conventions work and mixed
+    repos keep every door. None if the folder has neither. Shared with
+    gen_navigation.py — the two tools must agree on what a room's door is."""
+    for name in (f'{d.name}.md', 'README.md'):
+        if (d / name).is_file():
+            return d / name
+    return None
+
+
 def room_door(content: Path, room: str):
     """Return the site-absolute .md path for a room's door, or None."""
     d = content / room
     if not d.is_dir():
         return None
-    # the room's own folder note (Obsidian convention) wins over README.md,
-    # so both conventions work and mixed repos keep every door
-    for name in (f'{room}.md', 'README.md'):
-        if (d / name).is_file():
-            return f'/{room}/{name}'
+    note = folder_note(d)
+    if note:
+        return f'/{room}/{note.name}'
     mds = sorted(p for p in d.glob('*.md'))
     if mds:
         return f'/{room}/{mds[0].name}'
