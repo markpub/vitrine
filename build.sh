@@ -61,6 +61,10 @@ case "$PAGE_NAMES" in
     filename|slug) ;;
     *) echo "error: VITRINE_PAGE_NAMES must be 'filename' or 'slug', got '$PAGE_NAMES'" >&2; exit 2 ;;
 esac
+case "${VITRINE_FOLDER_NOTE:-}" in
+    ''|0|1) ;;
+    *) echo "error: VITRINE_FOLDER_NOTE must be unset, 0, or 1, got '$VITRINE_FOLDER_NOTE'" >&2; exit 2 ;;
+esac
 
 echo "==> 1. copy: $SRC -> $CONTENT (source stays untouched)"
 rm -rf "$WORK"

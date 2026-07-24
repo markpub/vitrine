@@ -44,9 +44,9 @@ from pathlib import Path
 
 import yaml
 
-# sibling-module helper (same directory)
+# sibling-module helpers (same directory)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from vitrine import split_front_matter  # noqa: E402
+from vitrine import escape_link_label, front_matter_data, split_front_matter  # noqa: E402
 
 ID_RE = re.compile(r'^[A-Z][A-Z0-9]*-\d+$')
 URL_RE = re.compile(r'^https?://\S+$')
@@ -56,18 +56,8 @@ NEVER_PUBLISHED = {'title', 'slug'}
 
 def parse_front_matter(md: Path):
     """Return (front-matter block, parsed dict or {}, body)."""
-    text = md.read_text(encoding='utf-8')
-    fm, body = split_front_matter(text)
-    data = {}
-    if fm:
-        inner = ''.join(fm.splitlines(keepends=True)[1:-1])
-        try:
-            parsed = yaml.safe_load(inner)
-            if isinstance(parsed, dict):
-                data = parsed
-        except yaml.YAMLError:
-            pass
-    return fm, data, body
+    fm, body = split_front_matter(md.read_text(encoding='utf-8'))
+    return fm, front_matter_data(fm), body
 
 
 def build_record_index(content: Path):
@@ -95,10 +85,30 @@ def render_value(value, records: dict, self_id) -> str:
     # a record's reference to ITSELF (its own id field) stays plain text
     if text in records and text != self_id:
         path, label = records[text]
-        return f'[{label}]({path})'
+        return f'[{escape_link_label(label)}]({path})'
     if URL_RE.match(text):
         return f'<{text}>'
     return text
+
+
+def validate_config(config: dict) -> dict:
+    """Warn (stderr) about misshapen metadata specs and coerce them to
+    'none', preserving the silent-nothing behavior but making it visible.
+    A valid spec is none, 'none', 'all', or a list of field names — a bare
+    scalar like `decision: id` is the classic mistake (meant `[id]`)."""
+    out = {}
+    for entity, spec in config.items():
+        if spec in (None, 'none', 'all') or isinstance(spec, list):
+            out[entity] = spec
+        else:
+            # the did-you-mean hint only makes sense for a bare field name
+            hint = f' (did you mean [{spec}]?)' if isinstance(spec, str) else ''
+            print(f"gen_metadata: WARNING: metadata spec for '{entity}' is "
+                  f"{spec!r}; expected 'none', 'all', or a list of field "
+                  f"names{hint} — publishing no fields for this type",
+                  file=sys.stderr)
+            out[entity] = 'none'
+    return out
 
 
 def fields_for(entity: str, config: dict):
@@ -143,7 +153,7 @@ def main(argv=None):
     if args.config and Path(args.config).is_file():
         loaded = yaml.safe_load(Path(args.config).read_text(encoding='utf-8'))
         if isinstance(loaded, dict) and isinstance(loaded.get('metadata'), dict):
-            config = loaded['metadata']
+            config = validate_config(loaded['metadata'])
     if not config:
         print('gen_metadata: no metadata config; nothing to do')
         return 0

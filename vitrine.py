@@ -165,20 +165,33 @@ def split_front_matter(text: str):
     return '', text
 
 
-def get_title(front_matter_block: str):
-    """Parse the frontmatter YAML and return a non-empty string title, or None."""
+def front_matter_data(front_matter_block: str) -> dict:
+    """Parse a frontmatter block (as returned by split_front_matter) into a
+    dict. Absent, malformed, or non-mapping YAML yields {} — callers never
+    see an exception. The one shared frontmatter parser for the toolchain."""
     if not front_matter_block:
-        return None
+        return {}
     inner = ''.join(front_matter_block.splitlines(keepends=True)[1:-1])
     try:
         data = yaml.safe_load(inner)
     except yaml.YAMLError:
-        return None
-    if isinstance(data, dict):
-        title = data.get('title')
-        if isinstance(title, str) and title.strip():
-            return title.strip()
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def get_title(front_matter_block: str):
+    """Parse the frontmatter YAML and return a non-empty string title, or None."""
+    title = front_matter_data(front_matter_block).get('title')
+    if isinstance(title, str) and title.strip():
+        return title.strip()
     return None
+
+
+def escape_link_label(label: str) -> str:
+    """Escape square brackets in a Markdown link label — an unescaped ]
+    would end the label early. Shared by every generator that builds
+    `[label](target)` links from titles or filenames."""
+    return label.replace('[', r'\[').replace(']', r'\]')
 
 
 def body_starts_with_h1(body: str) -> bool:
