@@ -82,6 +82,29 @@ def fix_listing(site: Path, listing_name: str, mapping) -> int:
     return count
 
 
+def fix_edit_links(site: Path, renames: dict) -> int:
+    """Point Edit buttons of renamed pages back at the REAL source files.
+
+    MarkPub builds edit URLs from the copy's file paths; under slug
+    publishing (rename_pages.py) those paths do not exist in the source
+    repo. For each renamed page, rewrite the `.../edit/<branch>/<new>.md`
+    href back to the source's bare-ID path."""
+    count = 0
+    for old_abs, new_abs in renames.items():
+        page = site / (scrub_path(new_abs).lstrip('/') + '.html')
+        if not page.is_file():
+            continue
+        old_rel, new_rel = old_abs.lstrip('/') + '.md', new_abs.lstrip('/') + '.md'
+        text = page.read_text(encoding='utf-8')
+        new_text, n = re.subn(
+            r'(href="[^"]*?/edit/[^"]*?)' + re.escape(new_rel) + r'"',
+            r'\g<1>' + old_rel + r'"', text)
+        if n:
+            page.write_text(new_text, encoding='utf-8')
+            count += n
+    return count
+
+
 def fix_lunr_posts(site: Path, mapping) -> int:
     """Rewrite titles in lunr-posts-<ts>.js (drives search-result display)."""
     count = 0
@@ -111,6 +134,9 @@ def main(argv=None):
     )
     parser.add_argument('content_dir', help='staged content copy (source of frontmatter titles)')
     parser.add_argument('site_dir', help='generated MarkPub site to fix up in place')
+    parser.add_argument('--rename-map', metavar='FILE',
+                        help='JSON map of copy-side page renames (from rename_pages.py); '
+                             'Edit buttons of renamed pages are pointed back at the source files')
     args = parser.parse_args(argv)
 
     content, site = Path(args.content_dir), Path(args.site_dir)
@@ -124,8 +150,13 @@ def main(argv=None):
     listings = sum(fix_listing(site, name, mapping)
                    for name in ('all-pages.html', 'recent-pages.html'))
     lunr = fix_lunr_posts(site, mapping)
+    edits = 0
+    if args.rename_map:
+        renames = json.loads(Path(args.rename_map).read_text(encoding='utf-8'))
+        edits = fix_edit_links(site, renames)
     print(f'markpub_post: {len(mapping)} titled pages; '
-          f'fixed {titles} <title> tags, {listings} listing entries, {lunr} lunr posts')
+          f'fixed {titles} <title> tags, {listings} listing entries, {lunr} lunr posts, '
+          f'{edits} edit links')
     return 0
 
 

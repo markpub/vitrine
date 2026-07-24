@@ -8,7 +8,10 @@ never `[[wikilinks]]`, which this repository's convention forbids.
 Room doors are emitted only for rooms that actually exist, so the sidebar
 cannot drift from the repository: `entities/entities.md` (the entity
 index), then each of library/ meetingroom/ project/ tools/ logging/,
-linking to the room's README.md or, failing that, its first Markdown file.
+linking to the room's folder note (`<room>/<room>.md`, Obsidian
+convention), else its README.md, else its first Markdown file. A SITEMAP
+entry is added when the content copy carries a sitemap.md (written by
+gen_navigation.py, which runs first).
 
 Door targets are written with their `.md` extension; the vitrine transform
 step (which runs after this generator) rewrites them to `.html`.
@@ -50,8 +53,11 @@ def room_door(content: Path, room: str):
     d = content / room
     if not d.is_dir():
         return None
-    if (d / 'README.md').is_file():
-        return f'/{room}/README.md'
+    # the room's own folder note (Obsidian convention) wins over README.md,
+    # so both conventions work and mixed repos keep every door
+    for name in (f'{room}.md', 'README.md'):
+        if (d / name).is_file():
+            return f'/{room}/{name}'
     mds = sorted(p for p in d.glob('*.md'))
     if mds:
         return f'/{room}/{mds[0].name}'
@@ -66,6 +72,8 @@ def generate(content: Path) -> str:
         door = room_door(content, room)
         if door:
             nav.append(f'- [{label}]({door})  ')
+    if (content / 'sitemap.md').is_file():
+        nav.append('- [SITEMAP](/sitemap.md)  ')
     nav.append('- [ALL PAGES](/all-pages.html)  ')
     nav.append('- [RECENT CHANGES](/recent-pages.html)')
 

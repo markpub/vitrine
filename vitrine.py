@@ -20,11 +20,17 @@ It applies three surgical, publisher-agnostic transforms in place to every
                        `^[ID](path.md)` is a validator-only artifact that
                        renders as garbage. It is removed, leaving the human
                        `[label](path.md)` intact.
-  T3 — .md → .html.    Relative/local Markdown link targets `x.md` (and
-                       `x.md#anchor`) are rewritten to `x.html`, so
+  T3 — .md → .html,    Relative/local Markdown link targets `x.md` (and
+       absolutized.    `x.md#anchor`) are rewritten to `x.html`, so
                        cross-references resolve to rendered pages on any
-                       static host. External (scheme:// or //) targets are
-                       never touched. Runs after T2.
+                       static host — and to SITE-ABSOLUTE paths
+                       (`/room/x.html`), computed from each file's location,
+                       so a page's links survive being served at the wrong
+                       URL (hosts without a real 404 fall back to serving
+                       some page for unknown routes, and relative links then
+                       compound into ever-deeper phantom paths). External
+                       (scheme:// or //) targets are never touched. Runs
+                       after T2.
 
 Hard guardrails: fenced code blocks (``` / ~~~) and inline code spans are
 never modified; YAML frontmatter is preserved byte-for-byte; everything
@@ -37,6 +43,8 @@ Requires: Python 3, PyYAML.
 """
 
 import argparse
+import json
+import posixpath
 import re
 import sys
 from pathlib import Path
@@ -65,16 +73,30 @@ def is_external(target: str) -> bool:
     return bool(EXTERNAL_RE.match(target))
 
 
-def transform_plain_text(text: str) -> str:
+def absolutize(target: str, base_dir: str) -> str:
+    """Resolve a relative link target against the file's site directory
+    (e.g. `../decision/DEC-001` from `/entities/meeting`), yielding a
+    site-absolute path. Already-absolute targets pass through."""
+    if target.startswith('/'):
+        return target
+    return posixpath.normpath(posixpath.join(base_dir, target))
+
+
+def transform_plain_text(text: str, base_dir: str, renames: dict) -> str:
     """Apply T2 then T3 to text known to contain no code spans/fences."""
     # T2 first, so the shadow's own `.md` links are gone before T3.
     text = SHADOW_RE.sub('', text)
+
+    def resolve(target):
+        # absolutize, then follow any copy-side rename (slug publishing)
+        abs_target = absolutize(target, base_dir)
+        return renames.get(abs_target, abs_target)
 
     def link_sub(m):
         pre, target, anchor, post = m.group(1), m.group(2), m.group(3) or '', m.group(4)
         if is_external(target):
             return m.group(0)
-        return f'{pre}{target}.html{anchor}{post}'
+        return f'{pre}{resolve(target)}.html{anchor}{post}'
 
     text = MDLINK_RE.sub(link_sub, text)
 
@@ -82,24 +104,24 @@ def transform_plain_text(text: str) -> str:
         pre, target, anchor, post = m.group(1), m.group(2), m.group(3) or '', m.group(4)
         if is_external(target):
             return m.group(0)
-        return f'{pre}{target}.html{anchor}{post}'
+        return f'{pre}{resolve(target)}.html{anchor}{post}'
 
     return MDREFDEF_RE.sub(refdef_sub, text)
 
 
-def transform_non_fence_chunk(chunk: str) -> str:
+def transform_non_fence_chunk(chunk: str, base_dir: str, renames: dict) -> str:
     """Apply transforms to a chunk outside fenced blocks, skipping inline code."""
     out = []
     pos = 0
     for m in INLINE_CODE_RE.finditer(chunk):
-        out.append(transform_plain_text(chunk[pos:m.start()]))
+        out.append(transform_plain_text(chunk[pos:m.start()], base_dir, renames))
         out.append(m.group(0))  # inline code: verbatim
         pos = m.end()
-    out.append(transform_plain_text(chunk[pos:]))
+    out.append(transform_plain_text(chunk[pos:], base_dir, renames))
     return ''.join(out)
 
 
-def transform_body(body: str) -> str:
+def transform_body(body: str, base_dir: str, renames: dict) -> str:
     """Walk the body line-by-line, leaving fenced code blocks verbatim."""
     out_parts = []
     plain_buf = []
@@ -112,7 +134,7 @@ def transform_body(body: str) -> str:
             m = FENCE_RE.match(line)
             if m:
                 # flush accumulated plain text through the transforms
-                out_parts.append(transform_non_fence_chunk(''.join(plain_buf)))
+                out_parts.append(transform_non_fence_chunk(''.join(plain_buf), base_dir, renames))
                 plain_buf = []
                 out_parts.append(line)  # fence opener: verbatim
                 in_fence = True
@@ -127,7 +149,7 @@ def transform_body(body: str) -> str:
                     and len(stripped) >= fence_len
                     and stripped == stripped[0] * len(stripped)):
                 in_fence = False
-    out_parts.append(transform_non_fence_chunk(''.join(plain_buf)))
+    out_parts.append(transform_non_fence_chunk(''.join(plain_buf), base_dir, renames))
     return ''.join(out_parts)
 
 
@@ -167,11 +189,14 @@ def body_starts_with_h1(body: str) -> bool:
     return False
 
 
-def transform_file(path: Path) -> bool:
+def transform_file(path: Path, content_root: Path, renames: dict) -> bool:
     """Apply T1–T3 to one file in place. Returns True if the file changed."""
     original = path.read_text(encoding='utf-8')
     fm, body = split_front_matter(original)
-    body = transform_body(body)  # T2 + T3, code-guarded
+    # the file's site directory, for T3 absolutization ('/' at the root)
+    rel_dir = path.parent.relative_to(content_root).as_posix()
+    base_dir = '/' if rel_dir == '.' else f'/{rel_dir}'
+    body = transform_body(body, base_dir, renames)  # T2 + T3, code-guarded
     title = get_title(fm)  # T1
     if title and not body_starts_with_h1(body):
         sep = '' if body.startswith('\n') else '\n'
@@ -190,18 +215,24 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument('content_dir', help='staged COPY of the content to transform in place (never the source repo)')
+    parser.add_argument('--rename-map', metavar='FILE',
+                        help='JSON map of copy-side page renames (from rename_pages.py); '
+                             'T3 rewrites link targets through it after absolutizing')
     args = parser.parse_args(argv)
 
     content = Path(args.content_dir)
     if not content.is_dir():
         parser.error(f'not a directory: {content}')
+    renames = {}
+    if args.rename_map:
+        renames = json.loads(Path(args.rename_map).read_text(encoding='utf-8'))
 
     changed = total = 0
     for md in sorted(content.rglob('*.md')):
         if any(part.startswith('.') for part in md.relative_to(content).parts):
             continue  # leave hidden dirs (.markpub etc.) alone
         total += 1
-        if transform_file(md):
+        if transform_file(md, content, renames):
             changed += 1
     print(f'vitrine: transformed {changed} of {total} Markdown files in {content}')
     return 0
