@@ -25,7 +25,10 @@ Value rendering:
     targets are emitted as `/path/ID.md`, so the later vitrine.py transform
     absolutizes them and follows any slug renames
   * `http(s)://` values become autolinks
-  * lists are comma-joined, each item rendered by the rules above
+  * lists of scalars are comma-joined, each item rendered by the rules above
+  * mappings (nested YAML) become an indented sub-list of `key: value`
+    bullets, recursing for deeper nesting; a list that holds a mapping is
+    rendered as a sub-list too, one bullet per item
   * everything else is printed as-is
 
 Runs BEFORE rename_pages.py (record files still carry their bare-ID names,
@@ -123,14 +126,61 @@ def fields_for(entity: str, config: dict):
     return None
 
 
+def is_nested(value) -> bool:
+    """True when a value needs a sub-list (a mapping, or a list holding one)
+    rather than an inline rendering."""
+    if isinstance(value, dict):
+        return True
+    return isinstance(value, list) and any(is_nested(v) for v in value)
+
+
+def render_nested(value, records: dict, self_id, depth: int) -> list:
+    """Indented sub-bullet lines for a mapping, or for a list that holds one."""
+    pad = '  ' * depth
+    lines = []
+    if isinstance(value, dict):
+        for key, v in value.items():
+            if v in (None, '', [], {}):
+                continue
+            if is_nested(v):
+                sub = render_nested(v, records, self_id, depth + 1)
+                if sub:
+                    lines.append(f'{pad}- {key}:')
+                    lines.extend(sub)
+            else:
+                lines.append(f'{pad}- {key}: {render_value(v, records, self_id)}')
+    else:
+        for v in value:
+            if v in (None, '', [], {}):
+                continue
+            if is_nested(v):
+                sub = render_nested(v, records, self_id, depth + 1)
+                if sub:
+                    lines.append(f'{pad}-')
+                    lines.extend(sub)
+            else:
+                lines.append(f'{pad}- {render_value(v, records, self_id)}')
+    return lines
+
+
 def metadata_block(data: dict, spec, records: dict) -> str:
     if spec == 'all':
         names = [k for k in data if k not in NEVER_PUBLISHED]
     else:
         names = [f for f in spec if f in data]
     self_id = data.get('id')
-    lines = [f'- **{name}:** {render_value(data[name], records, self_id)}'
-             for name in names if data.get(name) not in (None, '', [])]
+    lines = []
+    for name in names:
+        value = data.get(name)
+        if value in (None, '', [], {}):
+            continue
+        if is_nested(value):
+            sub = render_nested(value, records, self_id, 1)
+            if sub:
+                lines.append(f'- **{name}:**')
+                lines.extend(sub)
+        else:
+            lines.append(f'- **{name}:** {render_value(value, records, self_id)}')
     return '\n'.join(lines)
 
 
