@@ -4,7 +4,8 @@
 #   build.sh <source-repo> <output-site>
 #
 # Chain (the source repo is NEVER mutated; everything happens on a copy):
-#   1. copy      <source-repo> -> $WORK/content   (rsync, excluding VCS/tool dirs)
+#   1. copy      <source-repo> -> $WORK/content   (copy_content.py, excluding
+#                VCS/tool dirs and anything in .vitrineignore)
 #   1b. scaffold non-interactive `markpub init` supplies .markpub/ (config + theme)
 #   2. metadata  gen_metadata.py renders selected frontmatter fields as a
 #                bullet list on each record page (per .vitrine.yaml)
@@ -75,16 +76,18 @@ mkdir -p "$CONTENT"
 # exclude only; it never touches git, so ignored files remain tracked and shared.
 IGNORE_OPT=()
 if [ -f "$SRC/.vitrineignore" ]; then
-    IGNORE_OPT=(--exclude-from="$SRC/.vitrineignore")
+    IGNORE_OPT=(--ignore-file "$SRC/.vitrineignore")
     echo "    honoring .vitrineignore"
 fi
-rsync -a \
+# ${arr[@]+...} idiom, as at step 6: bash 3.2 (macOS) + set -u treat an EMPTY
+# array expansion as unbound
+"$PYTHON" "$VITRINE_DIR/copy_content.py" \
       --exclude .git --exclude .obsidian --exclude .claude \
       --exclude .markpub --exclude node_modules --exclude .vitrineignore \
       --exclude .vitrine.yaml \
-      "${IGNORE_OPT[@]}" \
+      ${IGNORE_OPT[@]+"${IGNORE_OPT[@]}"} \
       --exclude "$(basename "$WORK")" --exclude "$(basename "$OUT")" \
-      "$SRC"/ "$CONTENT"/
+      "$SRC" "$CONTENT"
 
 echo "==> 1b. scaffold: non-interactive markpub init"
 printf '%s\n%s\n%s\n' "$SITE_TITLE" "$SITE_AUTHOR" "$SITE_REPO" \
