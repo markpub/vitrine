@@ -60,3 +60,7 @@ The Pages build image provides node/npm, so search and RANDOM PAGE work out of t
 ## The boundary, restated
 
 Vitrine never mutates the source repository. It stages a copy, transforms the copy, and publishes the copy. If you ever find a diff in the source after a build, that is a bug in Vitrine, not a feature.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Copyright 2026 Peter Kaminski; contributions are made under the same license.
