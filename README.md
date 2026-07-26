@@ -37,7 +37,7 @@ Entity-manager repos keep records as Markdown-with-YAML-frontmatter, with three 
 
 ## Running it
 
-Requirements: Python 3 with `markpub` (0.4.5+) and `pyyaml`; optionally node/npm for the search index. Nothing outside the Python standard library is used by Vitrine's own stages, so there are no system tools to install.
+Requirements: Python **3.12+** with `markpub` **2.1.2+** and `pyyaml`; optionally node/npm for the search index. Nothing outside the Python standard library is used by Vitrine's own stages, so there are no system tools to install. markpub 0.x is unsupported and `build.sh` refuses to run against it — pip resolves `markpub` to the ancient 0.4.5 on Python ≤3.11 (2.x requires ≥3.12), which is exactly the trap the version guard exists to catch. One 2.x behavior worth knowing: markpub emits a `.json` sidecar per page containing that page's **full frontmatter**, independent of what `.vitrine.yaml` selects for display — on an ungated site, treat all frontmatter as published.
 
 ```
 SITE_TITLE=comroom SITE_AUTHOR="WSD group" SITE_REPO=github.com/WSD-Talks/comroom \
@@ -46,7 +46,7 @@ SITE_TITLE=comroom SITE_AUTHOR="WSD group" SITE_REPO=github.com/WSD-Talks/comroo
 
 Tests: `python3 -m unittest discover -s tests` from the repository root. Standard library only, nothing to install — see `tests/README.md`.
 
-Environment knobs (all optional): `PYTHON` (default `python3.11`), `VITRINE_WORK` (work dir, default `$PWD/_work`, wiped each run), `SITE_TITLE` (default: source basename), `SITE_AUTHOR`, `SITE_REPO` (enables per-page "Edit on GitHub" buttons pointing at the *source* `.md` files), `VITRINE_GATE` (`none` — default — publishes an ungated, publicly readable site; `basic-auth` installs `deploy/_worker.js`, an HTTP basic-auth Pages Function reading `SITE_USER`/`SITE_PASSWORD` from the host; the build log states which you got either way), `VITRINE_FOLDER_NOTE` (set to 1 so rooms lacking a note get `<room>/<room>.md` created instead of `README.md`), `VITRINE_PAGE_NAMES` (`filename` — default — publishes under source names; `slug` renames record pages on the copy to `<id>-<slug>`).
+Environment knobs (all optional): `PYTHON` (default `python3`; must be ≥3.12 with markpub ≥2.1.2 — an isolated venv, e.g. `python3.12 -m venv ~/.venvs/markpub && ~/.venvs/markpub/bin/pip install markpub pyyaml`, then `PYTHON=~/.venvs/markpub/bin/python`, sidesteps PEP 668 restrictions on system Pythons), `VITRINE_WORK` (work dir, default `$PWD/_work`, wiped each run), `SITE_TITLE` (default: source basename), `SITE_AUTHOR`, `SITE_REPO` (enables per-page "Edit on GitHub" buttons pointing at the *source* `.md` files), `VITRINE_GATE` (`none` — default — publishes an ungated, publicly readable site; `basic-auth` installs `deploy/_worker.js`, an HTTP basic-auth Pages Function reading `SITE_USER`/`SITE_PASSWORD` from the host; the build log states which you got either way), `VITRINE_FOLDER_NOTE` (set to 1 so rooms lacking a note get `<room>/<room>.md` created instead of `README.md`), `VITRINE_PAGE_NAMES` (`filename` — default — publishes under source names; `slug` renames record pages on the copy to `<id>-<slug>`).
 
 ## Cloudflare Pages wiring
 
@@ -54,7 +54,7 @@ Vendor `vitrine/` into the content repo (or fetch it in the build command), then
 
 - **Build command:** `pip install markpub && bash vitrine/build.sh . _site`
 - **Build output directory:** `_site`
-- **Environment variables:** `SITE_TITLE`, `SITE_AUTHOR`, `SITE_REPO` as desired; `PYTHON=python3` if the image has no `python3.11` alias.
+- **Environment variables:** `SITE_TITLE`, `SITE_AUTHOR`, `SITE_REPO` as desired. The image's `python3` must be ≥3.12 so `pip install markpub` resolves to 2.x — the build's version guard fails loudly if it resolved to 0.x instead.
 
 The Pages build image provides node/npm, so search and RANDOM PAGE work out of the box.
 

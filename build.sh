@@ -20,7 +20,10 @@
 #                states the access posture either way
 #
 # Environment (all optional):
-#   PYTHON        python interpreter with markpub + pyyaml (default: python3.11)
+#   PYTHON        python interpreter with markpub + pyyaml (default: python3).
+#                 Must be Python >=3.12 with markpub >=2.1.2 — the build
+#                 refuses to run against older markpub (0.x predates the
+#                 output format this pipeline is validated on).
 #   VITRINE_WORK  work directory (default: $PWD/_work; wiped each run)
 #   SITE_TITLE    website title      (default: basename of <source-repo>)
 #   SITE_AUTHOR   author line        (default: empty)
@@ -61,13 +64,35 @@ mkdir -p "$(dirname "$OUT_ARG")"
 OUT="$(cd "$(dirname "$OUT_ARG")" && pwd)/$(basename "$OUT_ARG")"
 
 VITRINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON="${PYTHON:-python3.11}"
+PYTHON="${PYTHON:-python3}"
 WORK="${VITRINE_WORK:-$PWD/_work}"
 CONTENT="$WORK/content"
 SITE_TITLE="${SITE_TITLE:-$(basename "$SRC")}"
 SITE_AUTHOR="${SITE_AUTHOR:-}"
 SITE_REPO="${SITE_REPO:-}"
 PAGE_NAMES="${VITRINE_PAGE_NAMES:-filename}"
+
+# Vitrine is validated against markpub >=2.1.2 (which needs Python >=3.12).
+# markpub 0.x reports success on this pipeline but predates the output format
+# the post stage is written against — refuse it rather than half-work.
+"$PYTHON" - <<'EOF' || exit 3
+import sys
+if sys.version_info < (3, 12):
+    sys.exit(f"vitrine: {sys.executable} is Python "
+             f"{sys.version_info.major}.{sys.version_info.minor}; "
+             "need >=3.12 (set PYTHON to a newer interpreter)")
+try:
+    from importlib.metadata import version
+    v = version("markpub")
+except Exception:
+    sys.exit("vitrine: markpub is not installed in this interpreter "
+             "(pip install 'markpub>=2.1.2', or set PYTHON to an "
+             "interpreter that has it)")
+if tuple(int(p) for p in v.split(".")[:3]) < (2, 1, 2):
+    sys.exit(f"vitrine: markpub {v} is too old; need >=2.1.2 "
+             "(0.x is unsupported — upgrade, or set PYTHON to an "
+             "interpreter with a current markpub)")
+EOF
 case "$PAGE_NAMES" in
     filename|slug) ;;
     *) echo "error: VITRINE_PAGE_NAMES must be 'filename' or 'slug', got '$PAGE_NAMES'" >&2; exit 2 ;;
