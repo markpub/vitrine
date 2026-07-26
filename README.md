@@ -16,7 +16,7 @@ Entity-manager repos keep records as Markdown-with-YAML-frontmatter, with three 
 
 `build.sh <source-repo> <output-site>` orchestrates:
 
-1. **copy** — `rsync -a` the source into `$WORK/content`, excluding `.git`, `.obsidian`, `.claude`, `.markpub`, `node_modules` (and the work/output dirs themselves). The source is never written to. A **`.vitrineignore`** at the source root (gitignore-style patterns) excludes further paths from the *published site* while leaving them fully git-tracked — for metadata that belongs in the repo but not on the website (e.g. correspondence between collaborators). It is a publish-time filter only; it never touches git.
+1. **copy** — `copy_content.py` copies the source into `$WORK/content`, excluding `.git`, `.obsidian`, `.claude`, `.markpub`, `node_modules` (and the work/output dirs themselves). The source is never written to. A **`.vitrineignore`** at the source root (gitignore syntax, as documented in `copy_content.py`) excludes further paths from the *published site* while leaving them fully git-tracked — for metadata that belongs in the repo but not on the website (e.g. correspondence between collaborators). It is a publish-time filter only; it never touches git. File modes, mtimes, symlinks, and empty directories all survive the copy.
    - **1b. scaffold** — non-interactive `markpub init` on the copy supplies `.markpub/` (config + dolce theme). Answers are piped from `SITE_TITLE` / `SITE_AUTHOR` / `SITE_REPO`; init's `netlify.toml` and `.github/` side-effects are removed. Scaffolding is regenerated each build, so nothing needs committing.
 2. **metadata** — `gen_metadata.py` renders each record's relevant frontmatter as a bullet list under the title, per the content repo's optional **`.vitrine.yaml`** (`metadata:` section: field list per entity type, in display order; `_default: none|all|[fields]` for the rest — same travel-with-the-content pattern as `.vitrineignore`, and equally unpublished). Values that reference another record become links labeled with that record's title; URLs autolink. No config, no change.
 3. **rename** (only with `VITRINE_PAGE_NAMES=slug`) — `rename_pages.py` renames record pages on the copy to `<id>-<slug>` (frontmatter `slug:` if present, else the slugified `title:`), so records publish under readable URLs (`/entities/decision/dec-001-build-a-shared-password-protected-website...`) while the source repo keeps its bare-ID filenames — publishing names are a view concern. A rename map is written for the later stages: `vitrine.py` rewrites link targets through it, and `markpub_post.py` points Edit buttons back at the real source files.
@@ -36,7 +36,7 @@ Entity-manager repos keep records as Markdown-with-YAML-frontmatter, with three 
 
 ## Running it
 
-Requirements: Python 3 with `markpub` (0.4.5+) and `pyyaml`; `rsync`; optionally node/npm for the search index.
+Requirements: Python 3 with `markpub` (0.4.5+) and `pyyaml`; optionally node/npm for the search index. Nothing outside the Python standard library is used by Vitrine's own stages, so there are no system tools to install.
 
 ```
 SITE_TITLE=comroom SITE_AUTHOR="WSD group" SITE_REPO=github.com/WSD-Talks/comroom \

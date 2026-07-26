@@ -8,7 +8,7 @@ Vitrine builds an entity-manager repo into a static site (`build.sh <repo> <out>
 
 ## Prerequisites
 
-- `python3` with `markpub` + `pyyaml`, `rsync`, and node/npm (for search index) — same as Vitrine.
+- `python3` with `markpub` + `pyyaml`, and node/npm (for search index) — same as Vitrine.
 - `wrangler`, authenticated (`npx wrangler whoami`). If a stored OAuth login exists, no interactive login is needed.
 - **The Cloudflare account id** (wrangler errors if the token has more than one account):
   `export CLOUDFLARE_ACCOUNT_ID=<id>` (find it with `npx wrangler whoami`).
