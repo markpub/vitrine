@@ -43,6 +43,8 @@ SITE_TITLE=comroom SITE_AUTHOR="WSD group" SITE_REPO=github.com/WSD-Talks/comroo
   bash vitrine/build.sh /path/to/comroom /path/to/output-site
 ```
 
+Tests: `python3 -m unittest discover -s tests` from the repository root. Standard library only, nothing to install — see `tests/README.md`.
+
 Environment knobs (all optional): `PYTHON` (default `python3.11`), `VITRINE_WORK` (work dir, default `$PWD/_work`, wiped each run), `SITE_TITLE` (default: source basename), `SITE_AUTHOR`, `SITE_REPO` (enables per-page "Edit on GitHub" buttons pointing at the *source* `.md` files), `VITRINE_FOLDER_NOTE` (set to 1 so rooms lacking a note get `<room>/<room>.md` created instead of `README.md`), `VITRINE_PAGE_NAMES` (`filename` — default — publishes under source names; `slug` renames record pages on the copy to `<id>-<slug>`).
 
 ## Cloudflare Pages wiring
