@@ -17,6 +17,19 @@ This tool runs AFTER `markpub build`, reads each source page's frontmatter
 generated site. It is the one deliberately MarkPub-specific piece of the
 chain; vitrine.py itself stays publisher-agnostic.
 
+It also prunes the infrastructure pages (404, sitemap) from the places
+MarkPub lists ordinary pages: the all-pages/recent-pages tables and the
+lunr posts file — the latter feeds both search-result display and the
+theme's RANDOM PAGE button, so pruning it keeps 'Page not found' out of
+the random rotation. The pages stay in the *serialized* lunr index (a
+prebuilt artifact this tool does not rewrite), so doSearch in search.html
+is patched to drop index hits that no longer have a posts entry — without
+that guard, one orphaned hit would break the whole result list. The posts
+pruning is therefore applied only when the guard patch takes (a theme
+change could stop its pattern matching); if it doesn't, the infra pages
+stay listed in search/random — the cosmetic status quo, never a broken
+search.
+
 Usage:
   markpub_post.py CONTENT_DIR SITE_DIR
 """
@@ -32,6 +45,9 @@ from pathlib import Path
 # import frontmatter/title helpers from vitrine.py (same directory)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vitrine import split_front_matter, get_title  # noqa: E402
+
+# infrastructure pages kept out of listings, search results, and RANDOM PAGE
+INFRA_PAGES = ('/404.html', '/sitemap.html')
 
 
 def scrub_path(filepath: str) -> str:
@@ -126,6 +142,62 @@ def fix_lunr_posts(site: Path, mapping) -> int:
     return count
 
 
+def prune_listing_rows(site: Path, listing_name: str) -> int:
+    """Drop the infrastructure pages' rows from a listing table."""
+    listing = site / listing_name
+    if not listing.is_file():
+        return 0
+    text = listing.read_text(encoding='utf-8')
+    count = 0
+    for target in INFRA_PAGES:
+        text, n = re.subn(
+            r'<tr>\s*<td>\s*<a href="' + re.escape(target) + r'">.*?</tr>\s*',
+            '', text, flags=re.S)
+        count += n
+    if count:
+        listing.write_text(text, encoding='utf-8')
+    return count
+
+
+def prune_lunr_posts(site: Path) -> int:
+    """Drop the infrastructure pages from lunr-posts-<ts>.js (feeds both
+    search-result display and the theme's RANDOM PAGE rotation)."""
+    count = 0
+    for posts_file in site.glob('lunr-posts-*.js'):
+        text = posts_file.read_text(encoding='utf-8')
+        m = re.match(r'^lunr_posts=\s*(.*)$', text, re.S)
+        if not m:
+            continue
+        try:
+            posts = ast.literal_eval(m.group(1).strip())
+        except (ValueError, SyntaxError):
+            continue
+        kept = [p for p in posts if p.get('link') not in INFRA_PAGES]
+        if len(kept) != len(posts):
+            posts_file.write_text('lunr_posts= ' + json.dumps(kept),
+                                  encoding='utf-8')
+            count += len(posts) - len(kept)
+    return count
+
+
+def guard_search_results(site: Path) -> bool:
+    """Make doSearch drop index hits with no posts entry: the serialized
+    lunr index still knows the pruned pages, and an orphaned hit would
+    throw on `element.title` and kill the whole result list."""
+    page = site / 'search.html'
+    if not page.is_file():
+        return False
+    text = page.read_text(encoding='utf-8')
+    new, n = re.subn(
+        r'(index\.search\(searchString\)\.map\(\(item\) => \{\s*'
+        r'return lunr_posts\.find\(\(post\) => item\.ref === post\.link\)\s*'
+        r'\}\))',
+        r'\1.filter((post) => post)', text)
+    if n:
+        page.write_text(new, encoding='utf-8')
+    return bool(n)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog='markpub_post.py',
@@ -154,9 +226,20 @@ def main(argv=None):
     if args.rename_map:
         renames = json.loads(Path(args.rename_map).read_text(encoding='utf-8'))
         edits = fix_edit_links(site, renames)
+    rows = sum(prune_listing_rows(site, name)
+               for name in ('all-pages.html', 'recent-pages.html'))
+    # guard FIRST, and only prune the posts file if the guard took: pruned
+    # posts without the guard would make any search hit on an infra page
+    # throw and blank that query's whole result list — worse than the
+    # cosmetic problem the pruning fixes
+    guarded = guard_search_results(site)
+    posts = prune_lunr_posts(site) if guarded else 0
+    guard_note = ('applied' if guarded
+                  else 'NOT applied — lunr posts left unpruned')
     print(f'markpub_post: {len(mapping)} titled pages; '
           f'fixed {titles} <title> tags, {listings} listing entries, {lunr} lunr posts, '
-          f'{edits} edit links')
+          f'{edits} edit links; pruned {rows} listing rows, {posts} lunr posts '
+          f'(infra pages); search guard {guard_note}')
     return 0
 
 
