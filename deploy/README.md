@@ -54,7 +54,7 @@ CF rebuilds on every push to the content repo, and the password is a real secret
        bash /tmp/vitrine/build.sh . _site
      ```
    - **Build output directory:** `_site`
-   - **Environment variables:** `VITRINE_GATE=basic-auth`, `VITRINE_REF` (the Vitrine tag to build with), `VITRINE_PAGE_NAMES`, `SITE_TITLE`, `SITE_AUTHOR`, `SITE_REPO`; `PYTHON=python3` if no `python3.11`.
+   - **Environment variables:** `VITRINE_GATE=basic-auth`, `VITRINE_REF` (the Vitrine tag to build with), `VITRINE_PAGE_NAMES`, `SITE_TITLE`, `SITE_AUTHOR`, `SITE_REPO`. The image's `python3` must be ≥3.12 so `pip install markpub` resolves to 2.x; the build refuses markpub 0.x (see the version guard in `build.sh`).
 
    **Two of these decide things you will not notice from a successful build**, so check both afterward:
    - **`VITRINE_GATE` decides whether the site is gated at all.** It defaults to `none`, which publishes an ungated, publicly readable site. `basic-auth` installs the worker as part of the build. The build log states which one you got, in those words — read it. Then confirm from outside: `curl -s -o /dev/null -w '%{http_code}' https://<project>.pages.dev/` must be `401`.
