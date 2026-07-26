@@ -25,6 +25,7 @@ Entity-manager repos keep records as Markdown-with-YAML-frontmatter, with three 
 6. **vitrine** — `vitrine.py` applies the three transforms in place on the copy (publisher-agnostic; see below).
 7. **build** — **vanilla, unmodified** `markpub build` renders the copy into `<output-site>`. If node/npm are present, the lunr search index is built (powers SEARCH and RANDOM PAGE); if not, the build still succeeds without it.
 8. **post** — `markpub_post.py` (the one deliberately MarkPub-specific piece) rewrites the places MarkPub keys off the filename stem: page `<title>` tags, all-pages/recent-pages listings, and the lunr posts list that drives search-result display.
+9. **gate** — when `VITRINE_GATE=basic-auth`, `deploy/_worker.js` is installed into the output as a Pages Function gating every request behind HTTP basic-auth. The gate is part of the build rather than a step someone adds to a deploy command, and the build log states the access posture either way — an ungated site used to be the silent result of a forgotten `cp`.
 
 ## The three transforms (`vitrine.py`)
 
@@ -45,7 +46,7 @@ SITE_TITLE=comroom SITE_AUTHOR="WSD group" SITE_REPO=github.com/WSD-Talks/comroo
 
 Tests: `python3 -m unittest discover -s tests` from the repository root. Standard library only, nothing to install — see `tests/README.md`.
 
-Environment knobs (all optional): `PYTHON` (default `python3.11`), `VITRINE_WORK` (work dir, default `$PWD/_work`, wiped each run), `SITE_TITLE` (default: source basename), `SITE_AUTHOR`, `SITE_REPO` (enables per-page "Edit on GitHub" buttons pointing at the *source* `.md` files), `VITRINE_FOLDER_NOTE` (set to 1 so rooms lacking a note get `<room>/<room>.md` created instead of `README.md`), `VITRINE_PAGE_NAMES` (`filename` — default — publishes under source names; `slug` renames record pages on the copy to `<id>-<slug>`).
+Environment knobs (all optional): `PYTHON` (default `python3.11`), `VITRINE_WORK` (work dir, default `$PWD/_work`, wiped each run), `SITE_TITLE` (default: source basename), `SITE_AUTHOR`, `SITE_REPO` (enables per-page "Edit on GitHub" buttons pointing at the *source* `.md` files), `VITRINE_GATE` (`none` — default — publishes an ungated, publicly readable site; `basic-auth` installs `deploy/_worker.js`, an HTTP basic-auth Pages Function reading `SITE_USER`/`SITE_PASSWORD` from the host; the build log states which you got either way), `VITRINE_FOLDER_NOTE` (set to 1 so rooms lacking a note get `<room>/<room>.md` created instead of `README.md`), `VITRINE_PAGE_NAMES` (`filename` — default — publishes under source names; `slug` renames record pages on the copy to `<id>-<slug>`).
 
 ## Cloudflare Pages wiring
 
