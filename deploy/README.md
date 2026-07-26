@@ -24,8 +24,9 @@ SITE_TITLE='WSD Talks' SITE_REPO='github.com/WSD-Talks/comroom' \
 
 # 2. drop the gate in. For a throwaway prototype you may hardcode USER/PASS
 #    in the worker; otherwise leave it reading env (Path B) and set a secret.
+#    VITRINE_GATE=basic-auth on the build above installs it for you;
+#    for a throwaway you may instead copy it and hardcode the constants:
 cp vitrine/deploy/_worker.js ./_site/_worker.js
-#    (quick: edit the two constants in ./_site/_worker.js)
 
 # 3. create the project once, then deploy
 export CLOUDFLARE_ACCOUNT_ID=<id>
@@ -50,14 +51,13 @@ CF rebuilds on every push to the content repo, and the password is a real secret
      ```sh
      pip install markpub && \
        git clone --depth 1 --branch "$VITRINE_REF" https://github.com/markpub/vitrine /tmp/vitrine && \
-       bash /tmp/vitrine/build.sh . _site && \
-       cp /tmp/vitrine/deploy/_worker.js _site/_worker.js
+       bash /tmp/vitrine/build.sh . _site
      ```
    - **Build output directory:** `_site`
-   - **Environment variables:** `VITRINE_REF` (the Vitrine tag to build with), `VITRINE_PAGE_NAMES`, `SITE_TITLE`, `SITE_AUTHOR`, `SITE_REPO`; `PYTHON=python3` if no `python3.11`.
+   - **Environment variables:** `VITRINE_GATE=basic-auth`, `VITRINE_REF` (the Vitrine tag to build with), `VITRINE_PAGE_NAMES`, `SITE_TITLE`, `SITE_AUTHOR`, `SITE_REPO`; `PYTHON=python3` if no `python3.11`.
 
-   **Two of these fail silently if you leave them out**, so check both after the first build:
-   - **The `cp … _worker.js` clause is the gate.** Drop it and the build still succeeds and the site still deploys — with no authentication at all, publicly readable. Confirm with `curl -s -o /dev/null -w '%{http_code}' https://<project>.pages.dev/`; it must be `401`.
+   **Two of these decide things you will not notice from a successful build**, so check both afterward:
+   - **`VITRINE_GATE` decides whether the site is gated at all.** It defaults to `none`, which publishes an ungated, publicly readable site. `basic-auth` installs the worker as part of the build. The build log states which one you got, in those words — read it. Then confirm from outside: `curl -s -o /dev/null -w '%{http_code}' https://<project>.pages.dev/` must be `401`.
    - **`VITRINE_PAGE_NAMES` decides every record's URL.** It defaults to `filename` (`/entities/decision/DEC-001.html`). A site previously built with `slug` publishes `/entities/decision/dec-001-<title>.html`, so omitting the variable silently changes every record URL and breaks existing links, including the ones in the content repo's own README. Set it to whatever the site already uses.
 4. **Set the gate secret(s)**, before the first build finishes:
    ```sh
@@ -88,6 +88,7 @@ Recorded here rather than left only in the Cloudflare dashboard, where the group
 | `SITE_TITLE` | `WSD Talks` |
 | `SITE_REPO` | `github.com/WSD-Talks/comroom` |
 | `PYTHON` | `python3`, if the build image has no `python3.11` |
+| `VITRINE_GATE` | `basic-auth` — without it the site publishes ungated |
 | `SITE_USER` | `wsd` (worker default) |
 | `SITE_PASSWORD` | a Pages secret, not in git |
 

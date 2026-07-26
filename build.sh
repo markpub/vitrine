@@ -16,6 +16,8 @@
 #   6. vitrine   vitrine.py applies the three transforms in place on the copy
 #   7. build     VANILLA markpub renders the copy -> <output-site>
 #   8. post      markpub_post.py puts human titles into <title>/all-pages/search
+#   9. gate      installs deploy/_worker.js when VITRINE_GATE=basic-auth, and
+#                states the access posture either way
 #
 # Environment (all optional):
 #   PYTHON        python interpreter with markpub + pyyaml (default: python3.11)
@@ -26,13 +28,21 @@
 #                 (default: empty — no Edit buttons)
 #   VITRINE_FOLDER_NOTE  set to 1 so rooms lacking a folder note get
 #                 `<room>/<room>.md` created instead of `README.md`
+#   VITRINE_GATE  none (default) ships an UNGATED, publicly readable site;
+#                 basic-auth installs deploy/_worker.js, an HTTP basic-auth
+#                 Pages Function reading SITE_USER/SITE_PASSWORD from the
+#                 host's env. Either way the build log says which you got.
 #   VITRINE_PAGE_NAMES  filename (default) publishes under the source names;
 #                 slug renames record pages on the copy to `<id>-<slug>`
 #                 (frontmatter slug:, else slugified title:). The source
 #                 repo keeps its bare-ID filenames either way.
 #
-# Cloudflare Pages wiring (vitrine/ vendored in the content repo):
-#   Build command:    pip install markpub && bash vitrine/build.sh . _site
+# Cloudflare Pages wiring — clone Vitrine OUTSIDE the content root, since
+# anything in it gets staged and published (see deploy/README.md):
+#   Build command:    pip install markpub &&
+#                     git clone --depth 1 --branch "$VITRINE_REF" \
+#                       https://github.com/markpub/vitrine /tmp/vitrine &&
+#                     bash /tmp/vitrine/build.sh . _site
 #   Output directory: _site
 #
 # Search + RANDOM PAGE need a lunr index, which needs node/npm; if they are
@@ -65,6 +75,11 @@ esac
 case "${VITRINE_FOLDER_NOTE:-}" in
     ''|0|1) ;;
     *) echo "error: VITRINE_FOLDER_NOTE must be unset, 0, or 1, got '$VITRINE_FOLDER_NOTE'" >&2; exit 2 ;;
+esac
+GATE="${VITRINE_GATE:-none}"
+case "$GATE" in
+    none|basic-auth) ;;
+    *) echo "error: VITRINE_GATE must be 'none' or 'basic-auth', got '$GATE'" >&2; exit 2 ;;
 esac
 
 echo "==> 1. copy: $SRC -> $CONTENT (source stays untouched)"
@@ -136,5 +151,23 @@ fi
 
 echo "==> 8. post: human titles into <title>, all-pages, recent-pages, search"
 "$PYTHON" "$VITRINE_DIR/markpub_post.py" ${RENAME_OPT[@]+"${RENAME_OPT[@]}"} "$CONTENT" "$OUT"
+
+# The gate is part of the build, not a step someone remembers to add to a
+# deploy command. Whichever way it goes, the build SAYS so: an ungated site
+# used to be the silent outcome of a forgotten `cp`, and silence is the wrong
+# way to learn that a private site went out readable by anyone.
+echo "==> 9. gate: $GATE"
+case "$GATE" in
+    basic-auth)
+        cp "$VITRINE_DIR/deploy/_worker.js" "$OUT/_worker.js"
+        echo "    HTTP basic-auth worker installed; the host must supply"
+        echo "    SITE_PASSWORD (and optionally SITE_USER) as a secret."
+        echo "    The worker fails CLOSED: with no secret set it 401s everyone."
+        ;;
+    none)
+        echo "    *** NO ACCESS GATE — this site will be PUBLICLY READABLE. ***"
+        echo "    Set VITRINE_GATE=basic-auth to put it behind a shared password."
+        ;;
+esac
 
 echo "==> done: $OUT"
