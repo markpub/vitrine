@@ -1,6 +1,6 @@
 # Vitrine
 
-Vitrine prepares a structured-Markdown "entity-manager" repository for publishing as a static website with **vanilla MarkPub**, by transforming a **copy** of the content — never the source.
+Vitrine prepares a structured-Markdown [entity-manager](https://github.com/komunejo/entity-management) repository for publishing as a static website with **vanilla MarkPub**, by transforming a **copy** of the content — never the source.
 
 The name is the boundary: a vitrine is a museum display case; it presents the objects unaltered. The source repository is read-only to this tool. Every change happens on a staged copy under a throwaway work directory, and the publisher runs against that copy.
 
