@@ -39,18 +39,57 @@ Site is then at `https://<project>.pages.dev`. If you hardcoded the password it 
 
 CF rebuilds on every push to the content repo, and the password is a real secret.
 
-1. **Vendor Vitrine** into the content repo (or fetch it in the build command).
-2. In the Pages project (Settings → Builds & deployments):
-   - **Build command:** `pip install markpub && bash vitrine/build.sh . _site && cp vitrine/deploy/_worker.js _site/_worker.js`
+1. **Fetch Vitrine in the build command, from outside the content root.** Vitrine is public, so the build can clone it — no vendored copy to drift.
+
+   **Clone it to `/tmp`, not into the repo.** `build.sh` stages a copy of everything in the source root except `.git`, `.obsidian`, `.claude`, `.markpub`, `node_modules`, and the work/output directories. A `vitrine/` directory sitting in the content root is not on that list, so it would be copied into the staged content and **published as site pages** — Vitrine's README, its Python files, and its `deploy/_worker.js` all served as ordinary URLs. Cloning outside the content root avoids the whole question. (If you do vendor Vitrine into the content repo instead, add `vitrine/` to that repo's `.vitrineignore`.)
+
+2. **Pin the version.** The build clones a tag, not `main`, so the group's live site does not silently change every time Vitrine does. Bump `VITRINE_REF` deliberately.
+
+3. In the Pages project (Settings → Builds & deployments):
+   - **Build command:**
+     ```sh
+     pip install markpub && \
+       git clone --depth 1 --branch "$VITRINE_REF" https://github.com/markpub/vitrine /tmp/vitrine && \
+       bash /tmp/vitrine/build.sh . _site && \
+       cp /tmp/vitrine/deploy/_worker.js _site/_worker.js
+     ```
    - **Build output directory:** `_site`
-   - **Environment variables:** `SITE_TITLE`, `SITE_AUTHOR`, `SITE_REPO`; `PYTHON=python3` if no `python3.11`.
-3. **Set the gate secret(s):**
+   - **Environment variables:** `VITRINE_REF` (the Vitrine tag to build with), `VITRINE_PAGE_NAMES`, `SITE_TITLE`, `SITE_AUTHOR`, `SITE_REPO`; `PYTHON=python3` if no `python3.11`.
+
+   **Two of these fail silently if you leave them out**, so check both after the first build:
+   - **The `cp … _worker.js` clause is the gate.** Drop it and the build still succeeds and the site still deploys — with no authentication at all, publicly readable. Confirm with `curl -s -o /dev/null -w '%{http_code}' https://<project>.pages.dev/`; it must be `401`.
+   - **`VITRINE_PAGE_NAMES` decides every record's URL.** It defaults to `filename` (`/entities/decision/DEC-001.html`). A site previously built with `slug` publishes `/entities/decision/dec-001-<title>.html`, so omitting the variable silently changes every record URL and breaks existing links, including the ones in the content repo's own README. Set it to whatever the site already uses.
+4. **Set the gate secret(s)**, before the first build finishes:
    ```sh
    npx wrangler pages secret put SITE_PASSWORD --project-name <proj>
    npx wrangler pages secret put SITE_USER --project-name <proj>   # optional; defaults to "wsd"
    ```
-4. Connecting a **private org repo** needs the Cloudflare GitHub app authorized for that org — a one-time dashboard step.
-5. **Real SSO instead of a shared password:** swap the `_worker.js` gate for **Cloudflare Access** (Zero Trust) — email one-time-pin or SSO, per-person, revocable. That's the grown-up version of the gate; the shared password is fine for a small trusted group.
+   The worker fails closed: with the secret unset it 401s everyone, which is the safe direction but is still an outage.
+5. Connecting a **private org repo** needs the Cloudflare GitHub app authorized for that org — a one-time dashboard step. The app can be scoped to **selected repositories** rather than the whole org.
+6. **Real SSO instead of a shared password:** swap the `_worker.js` gate for **Cloudflare Access** (Zero Trust) — email one-time-pin or SSO, per-person, revocable. That's the grown-up version of the gate; the shared password is fine for a small trusted group.
+
+### A direct-upload project cannot become git-connected
+
+Cloudflare is explicit that a Pages project created by direct upload cannot be switched to a Git integration later. Moving a Path A prototype to Path B therefore means **deleting the project and recreating it**, which takes the site down and frees its `<project>.pages.dev` hostname to be reclaimed on recreate.
+
+Do it last, and rehearse it first: create a **second, throwaway Pages project** against the same content repo, prove the exact build command and environment there, and only then delete and recreate the real one. The build config is the part that takes iterations to get right, and the deletion is the only step that costs downtime — there is no reason for those two to happen at the same time.
+
+## The WSD Talks production config
+
+Recorded here rather than left only in the Cloudflare dashboard, where the group cannot read it.
+
+| Setting | Value |
+|---|---|
+| Pages project | `wsd-talks`, on `kaminski@istori.com`'s account (`c4d56c078164c1183d46dfc31e51afd9`) |
+| Content repo | `github.com/WSD-Talks/comroom`, production branch `main` |
+| Build output | `_site` |
+| `VITRINE_REF` | the pinned Vitrine tag |
+| `VITRINE_PAGE_NAMES` | `slug` — the live site publishes slug URLs; `filename` would break every existing record link |
+| `SITE_TITLE` | `WSD Talks` |
+| `SITE_REPO` | `github.com/WSD-Talks/comroom` |
+| `PYTHON` | `python3`, if the build image has no `python3.11` |
+| `SITE_USER` | `wsd` (worker default) |
+| `SITE_PASSWORD` | a Pages secret, not in git |
 
 ## Notes / gotchas
 
