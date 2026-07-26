@@ -24,7 +24,11 @@ theme's RANDOM PAGE button, so pruning it keeps 'Page not found' out of
 the random rotation. The pages stay in the *serialized* lunr index (a
 prebuilt artifact this tool does not rewrite), so doSearch in search.html
 is patched to drop index hits that no longer have a posts entry — without
-that guard, one orphaned hit would break the whole result list.
+that guard, one orphaned hit would break the whole result list. The posts
+pruning is therefore applied only when the guard patch takes (a theme
+change could stop its pattern matching); if it doesn't, the infra pages
+stay listed in search/random — the cosmetic status quo, never a broken
+search.
 
 Usage:
   markpub_post.py CONTENT_DIR SITE_DIR
@@ -224,12 +228,18 @@ def main(argv=None):
         edits = fix_edit_links(site, renames)
     rows = sum(prune_listing_rows(site, name)
                for name in ('all-pages.html', 'recent-pages.html'))
-    posts = prune_lunr_posts(site)
+    # guard FIRST, and only prune the posts file if the guard took: pruned
+    # posts without the guard would make any search hit on an infra page
+    # throw and blank that query's whole result list — worse than the
+    # cosmetic problem the pruning fixes
     guarded = guard_search_results(site)
+    posts = prune_lunr_posts(site) if guarded else 0
+    guard_note = ('applied' if guarded
+                  else 'NOT applied — lunr posts left unpruned')
     print(f'markpub_post: {len(mapping)} titled pages; '
           f'fixed {titles} <title> tags, {listings} listing entries, {lunr} lunr posts, '
           f'{edits} edit links; pruned {rows} listing rows, {posts} lunr posts '
-          f'(infra pages); search guard {"applied" if guarded else "NOT applied"}')
+          f'(infra pages); search guard {guard_note}')
     return 0
 
 
