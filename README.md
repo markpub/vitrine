@@ -4,6 +4,8 @@ Vitrine prepares a structured-Markdown [entity-manager](https://github.com/komun
 
 The name is the boundary: a vitrine is a museum display case; it presents the objects unaltered. The source repository is read-only to this tool. Every change happens on a staged copy under a throwaway work directory, and the publisher runs against that copy.
 
+To see what that produces, there is a complete worked example: [markpub/probes-wiki](https://github.com/markpub/probes-wiki), an entity-managed wiki of space probes, published live at **[probes-wiki.pages.dev](https://probes-wiki.pages.dev)** — typed records, cross-reference shadows, `.vitrine.yaml` metadata display, and a `.vitrineignore`'d directory you can see in the repo but not on the site.
+
 ## Why it exists
 
 Entity-manager repos keep records as Markdown-with-YAML-frontmatter, with three conventions that plain MarkPub publishes badly:
